@@ -24,7 +24,7 @@ namespace EnumDropdown
     {
         public override string Name => "EnumDropdown";
         public override string Author => "badhaloninja";
-        public override string Version => "1.0.0";
+        public override string Version => "1.0.1";
         public override string Link => "https://github.com/badhaloninja/EnumDropdown";
 
         private readonly static MethodInfo buildFlagUI = typeof(EnumDropdown).GetMethod("BuildFlagUi", BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
@@ -82,7 +82,7 @@ namespace EnumDropdown
             public static void Postfix(LogixNode __instance, Slot root)
             {
                 var horiz = root.GetComponentInChildren<HorizontalLayout>()?.Slot;
-                if (root == null) return;
+                if (horiz == null) return;
 
                 var ui = new UIBuilder(horiz);
                 ui.Style.MinWidth = 32f;
@@ -98,6 +98,8 @@ namespace EnumDropdown
             // Multiplayer Support
             var logixRoot = btn.Slot.AddSlot("logix");
             // Logix Support for others clicking the button and respecting local user
+
+            btn.DestroyWhenDestroyed(logixRoot); // Cleanup stray logix slot when packing enum input nodes
 
 
             // Logix to drive local user into button reference set
