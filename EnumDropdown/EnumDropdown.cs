@@ -23,17 +23,24 @@ namespace EnumDropdown
 {
     public class EnumDropdown : NeosMod
     {
+        private const string LVCExclude = "LogixVisualCustomizer";
+        private static readonly Version LVCExcludeVersion = new Version(1, 1, 0);
+
         public override string Name => "EnumDropdown";
         public override string Author => "badhaloninja";
-        public override string Version => "1.1.0";
+        public override string Version => "1.2.0";
         public override string Link => "https://github.com/badhaloninja/EnumDropdown";
 
-        private readonly static MethodInfo buildUI = typeof(EnumDropdown).GetMethod("BuildUi", BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
+        private readonly static MethodInfo buildUI = typeof(EnumDropdown).GetMethod(nameof(EnumDropdown.BuildUI), BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
 
         public override void OnEngineInit()
         {
-            Harmony harmony = new Harmony("me.badhaloninja.EnumDropdown");
-            harmony.PatchAll();
+            var harmony = new Harmony("me.badhaloninja.EnumDropdown");
+            harmony.PatchAllUncategorized();
+
+            // Only patch the LogiX EnumInputs when LogixVisualCustomizer with a version above 1.1.0 isn't present
+            if (!ModLoader.Mods().Any(mod => mod.Name == LVCExclude && new Version(mod.Version) > LVCExcludeVersion))
+                harmony.PatchCategory(LVCExclude);
         }
         
         [HarmonyPatch(typeof(EnumMemberEditor), "BuildUI")]
@@ -52,7 +59,9 @@ namespace EnumDropdown
                 ui.NestOut();
             }
         }
+
         [HarmonyPatch]
+        [HarmonyPatchCategory(LVCExclude)]
         private class EnumInputDropdown
         {
             // Harmony uses the TargetMethods method to let me generate a list of methods to patch
@@ -231,7 +240,7 @@ namespace EnumDropdown
             return root;
         }
 
-        private static void BuildUi<E>(UIBuilder ui, IField target) where E : Enum
+        private static void BuildUI<E>(UIBuilder ui, IField target) where E : Enum
         {
             if (target.ValueType.IsDefined(typeof(FlagsAttribute), false))
             { // If the enum is a flag type (where you can have multiple values set at once)
