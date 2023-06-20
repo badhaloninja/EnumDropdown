@@ -52,36 +52,20 @@ namespace EnumDropdown
                 ui.NestOut();
             }
         }
-        [HarmonyPatch]
+
+        [HarmonyPatch(typeof(LogixNode), "GenerateVisual")]
         private class EnumInputDropdown
         {
-            // Harmony uses the TargetMethods method to let me generate a list of methods to patch
-            // I need to do this to patch the enum input nodes because patching generics is fun :)
-            static IEnumerable<MethodBase> TargetMethods() 
+            public static void Prefix(SyncRef<Slot> ____activeVisual, ref bool __state)
             {
-                var namespaces = new string[] // List of namespaces to search for enums
-                {
-                    "FrooxEngine",
-                    "BaseX",
-                    "CloudX.Shared",
-                    "CodeX",
-                    "System.Text",
-                    "System.IO",
-                    "System.Net"
-                    //"System"
-                };
-                var targetClass = typeof(EnumInput<>);
-                return AccessTools.AllTypes() // Patch enum inputs (durring testing 653 enums brought it down from ~4k)
-                    .Where(type =>
-                            namespaces.Any(name => type?.Namespace != null && type.Namespace.StartsWith(name) || type.Namespace == "System") // If under a listed namespace OR if namespace is exactly System
-                            && type.IsEnum && !type.IsGenericType) // Select all types that are an enum ignoring generic enums that apparently exist somehow
-                    .Select(type => targetClass.MakeGenericType(type).GetMethod("OnGenerateVisual", BindingFlags.Instance | BindingFlags.NonPublic)) // Convert EnumInput<T> for every enum and get it's OnGenerateVisual method
-                    .Cast<MethodBase>();
+                __state = ____activeVisual.Target == null;
             }
 
-            public static void Postfix(LogixNode __instance, Slot root)
+            public static void Postfix(LogixNode __instance, SyncRef<Slot> ____activeVisual, bool __state)
             {
-                var horiz = root.GetComponentInChildren<HorizontalLayout>()?.Slot;
+                if (!__state || !__instance.GetType().IsGenericType || __instance.GetType().GetGenericTypeDefinition() != typeof(EnumInput<>)) return;
+
+                var horiz = ____activeVisual.Target.GetComponentInChildren<HorizontalLayout>()?.Slot;
                 if (horiz == null) return;
 
                 var ui = new UIBuilder(horiz);
