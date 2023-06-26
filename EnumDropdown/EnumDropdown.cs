@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Reflection;
-using System.Collections.Generic;
-using System.Linq;
+using System.Globalization;
 
 using HarmonyLib;
 using NeosModLoader;
@@ -17,7 +16,6 @@ using FrooxEngine.LogiX.Operators;
 using FrooxEngine.LogiX.ProgramFlow;
 using FrooxEngine.LogiX.References;
 using FrooxEngine.LogiX.WorldModel;
-using System.Globalization;
 
 namespace EnumDropdown
 {
