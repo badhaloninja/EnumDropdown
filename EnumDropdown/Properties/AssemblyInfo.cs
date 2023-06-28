@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("badhaloninja")]
 [assembly: AssemblyProduct("EnumDropdown")]
-[assembly: AssemblyCopyright("Copyright © badhaloninja 2022")]
+[assembly: AssemblyCopyright("Copyright © badhaloninja 2023")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

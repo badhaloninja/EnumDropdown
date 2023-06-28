@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Reflection;
-using System.Collections.Generic;
-using System.Linq;
+using System.Globalization;
 
 using HarmonyLib;
 using NeosModLoader;
@@ -17,7 +16,7 @@ using FrooxEngine.LogiX.Operators;
 using FrooxEngine.LogiX.ProgramFlow;
 using FrooxEngine.LogiX.References;
 using FrooxEngine.LogiX.WorldModel;
-using System.Globalization;
+using System.Linq;
 
 namespace EnumDropdown
 {
@@ -31,7 +30,7 @@ namespace EnumDropdown
         public override string Version => "1.2.0";
         public override string Link => "https://github.com/badhaloninja/EnumDropdown";
 
-        private readonly static MethodInfo buildUI = typeof(EnumDropdown).GetMethod(nameof(EnumDropdown.BuildUI), BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
+        private readonly static MethodInfo buildUI = typeof(EnumDropdown).GetMethod("BuildUI", AccessTools.all); // Store this for later :)
 
         public override void OnEngineInit()
         {
@@ -46,51 +45,33 @@ namespace EnumDropdown
         [HarmonyPatch(typeof(EnumMemberEditor), "BuildUI")]
         private class EnumEditorDropdown
         {
-            public static void Postfix(EnumMemberEditor __instance, UIBuilder ui)
+            public static void Postfix(EnumMemberEditor __instance, RelayRef<IField> ____target, UIBuilder ui)
             {
                 var root = ui.Root.GetComponentInChildren<HorizontalLayout>()?.Slot;
                 if (root == null) return;
 
                 ui.NestInto(root);
-                var targetEnum = __instance.TryGetField("_target") as RelayRef<IField>;
 
-                AddDropdownBtn(ui, targetEnum?.Target);
+                AddDropdownBtn(ui, ____target, __instance);
 
                 ui.NestOut();
             }
         }
 
-        [HarmonyPatch]
         [HarmonyPatchCategory(LVCExclude)]
+        [HarmonyPatch(typeof(LogixNode), "GenerateVisual")]
         private class EnumInputDropdown
         {
-            // Harmony uses the TargetMethods method to let me generate a list of methods to patch
-            // I need to do this to patch the enum input nodes because patching generics is fun :)
-            static IEnumerable<MethodBase> TargetMethods() 
+            public static void Prefix(SyncRef<Slot> ____activeVisual, ref bool __state)
             {
-                var namespaces = new string[] // List of namespaces to search for enums
-                {
-                    "FrooxEngine",
-                    "BaseX",
-                    "CloudX.Shared",
-                    "CodeX",
-                    "System.Text",
-                    "System.IO",
-                    "System.Net"
-                    //"System"
-                };
-                var targetClass = typeof(EnumInput<>);
-                return AccessTools.AllTypes() // Patch enum inputs (durring testing 653 enums brought it down from ~4k)
-                    .Where(type =>
-                            namespaces.Any(name => type?.Namespace != null && type.Namespace.StartsWith(name) || type.Namespace == "System") // If under a listed namespace OR if namespace is exactly System
-                            && type.IsEnum && !type.IsGenericType) // Select all types that are an enum ignoring generic enums that apparently exist somehow
-                    .Select(type => targetClass.MakeGenericType(type).GetMethod("OnGenerateVisual", BindingFlags.Instance | BindingFlags.NonPublic)) // Convert EnumInput<T> for every enum and get it's OnGenerateVisual method
-                    .Cast<MethodBase>();
+                __state = ____activeVisual.Target == null;
             }
 
-            public static void Postfix(LogixNode __instance, Slot root)
+            public static void Postfix(LogixNode __instance, SyncRef<Slot> ____activeVisual, bool __state)
             {
-                var horiz = root.GetComponentInChildren<HorizontalLayout>()?.Slot;
+                if (!__state || !__instance.GetType().IsGenericType || __instance.GetType().GetGenericTypeDefinition() != typeof(EnumInput<>)) return;
+
+                var horiz = ____activeVisual.Target.GetComponentInChildren<HorizontalLayout>()?.Slot;
                 if (horiz == null) return;
 
                 var ui = new UIBuilder(horiz);
@@ -100,7 +81,7 @@ namespace EnumDropdown
             }
         }
 
-        private static void AddDropdownBtn(UIBuilder ui, IField target)
+        private static void AddDropdownBtn(UIBuilder ui, IField target, EnumMemberEditor editor = null)
         {
             var btn = ui.Button("▼");
             btn.Slot.DestroyWhenUserLeaves(btn.Slot.LocalUser);
@@ -139,19 +120,23 @@ namespace EnumDropdown
                         multiplayerSupport.Reference.Target = null;
                         return;
                     }
-                    SpawnEnumSelector(btn, target, user: multiplayerSupport.Reference.Target); // SpawnEnumSelector as pressing user
+                    SpawnEnumSelector(btn, target, editor, user: multiplayerSupport.Reference.Target); // SpawnEnumSelector as pressing user
                     multiplayerSupport.Reference.Target = null; // Reset
                 });
             };
 
             // Local user spawnEnumSelector
-            btn.LocalPressed += (b, e) => SpawnEnumSelector(b, target, e.globalPoint);
+            btn.LocalPressed += (b, e) => SpawnEnumSelector(b, target, editor, e.globalPoint);
         }
 
-        private static void SpawnEnumSelector(IButton button, IField target, float3? globalPoint = null, User user = null)
+        private static void SpawnEnumSelector(IButton button, IField target, EnumMemberEditor editor, float3? globalPoint = null, User user = null)
         {
-            if (target == null || !target.ValueType.IsEnum) return; // Skip if target is null
-            Slot enumSelector = BuildEnumSelector(target); // Build Enum Selector
+            //editor == null && (target == null || !target.ValueType.IsEnum)
+            if (editor == null && (target == null || !target.ValueType.IsEnum)) return; // Skip if target is null
+
+            if (editor != null && (editor.GetMemberValue() == null || !editor.GetMemberValue().GetType().IsEnum)) return;
+
+            Slot enumSelector = BuildEnumSelector(target, editor); // Build Enum Selector
 
 
             // Position Selector
@@ -204,13 +189,15 @@ namespace EnumDropdown
             enumSelector.LocalScale *= userRoot.GlobalScale; // Scale the selector relavive to the user
         }
 
-        public static Slot BuildEnumSelector(IField target)
+        public static Slot BuildEnumSelector(IField target, EnumMemberEditor editor)
         {
+            
             var root = target.World.LocalUserSpace.AddSlot("EnumSelector", false); // Create non-persistant root
             root.AttachComponent<Grabbable>();
             root.AttachComponent<ObjectRoot>();
 
             root.AttachComponent<DynamicVariableSpace>().SpaceName.Value = "EnumSelector";
+
 
             root.DestroyWhenUserLeaves(root.LocalUser);
 
@@ -234,31 +221,37 @@ namespace EnumDropdown
 
             ui.Style.MinHeight = 32f;
 
+            Type valueType = target.ValueType;
+            if (editor != null)
+            {
+                object memberValue = editor.GetMemberValue();
+                valueType = memberValue.GetType();
+            }
 
-            buildUI.MakeGenericMethod(target.ValueType).Invoke(null, new object[] { ui, target });
+            buildUI.MakeGenericMethod(valueType).Invoke(null, new object[] { ui, target, editor });
 
             return root;
         }
 
-        private static void BuildUI<E>(UIBuilder ui, IField target) where E : Enum
+        private static void BuildUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
-            if (target.ValueType.IsDefined(typeof(FlagsAttribute), false))
+            if (typeof(E).IsDefined(typeof(FlagsAttribute), false))
             { // If the enum is a flag type (where you can have multiple values set at once)
-                BuildFlagUi<E>(ui, target);
+                BuildFlagUi<E>(ui, target, editor);
             }
             else
             {
-                BuildEnumUi(ui, target);
+                BuildEnumUi<E>(ui, target, editor);
             }
 
             ui.Style.MinHeight = -1f; // Reset MinHeight so that the VerticalLayout does overlay other elements
             ui.VerticalLayout(8f);
 
-            PopulateValues<E>(ui.Root, target);
+            PopulateValues<E>(ui.Root, target, editor);
         }
 
 
-        private static void BuildFlagUi<E>(UIBuilder ui, IField target) where E : Enum
+        private static void BuildFlagUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
             // Destroy on cancel button pressed
             var cancel = ui.Button("Cancel", new color(1f, 0.8f, 0.8f));
@@ -267,12 +260,35 @@ namespace EnumDropdown
             ui.Text("Value:");
             var btn = ui.Button("<i>Invalid Value</i>", new color(0.8f, 0.8f, 1f, 1f));
 
+            IField<E> buttonTarget;
+            E originalValue;
+
+            DynamicValueVariable<E> setValueProxy = null;
+            if (editor != null)
+            {
+                setValueProxy = btn.Slot.AttachComponent<DynamicValueVariable<E>>();
+                setValueProxy.VariableName.Value = "proxy_value";
+
+                object memberValue = editor.GetMemberValue();
+
+                originalValue = memberValue != null? (E)memberValue : default;
+                buttonTarget = setValueProxy.Value;
+            } else
+            {
+                originalValue = (E)target.BoxedValue;
+                buttonTarget = target as IField<E>;
+            }
+
             // Destory On Value set
-            btn.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = btn.Slot.GetObjectRoot().Destroy;
+            if (editor == null)
+            {
+                btn.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = btn.Slot.GetObjectRoot().Destroy;
+            }
+            
             // Value Set
             var bvSet = btn.Slot.AttachComponent<ButtonValueSet<E>>();
-            bvSet.TargetValue.Target = target as IField<E>; // Point value set to target field
-            bvSet.SetValue.Value = (E)target.BoxedValue; // Initialize to the current value
+            bvSet.TargetValue.Target = buttonTarget; // Point value set to target field
+            bvSet.SetValue.Value = originalValue; // Initialize to the current value
 
             // Drive value set lable to be the selected enums
             btn.LabelTextField.DriveFrom(bvSet.SetValue, "{0}");
@@ -285,8 +301,8 @@ namespace EnumDropdown
             // Using ulong field and listening for changes to get around this while still having 'multiplayer support'
             var rawValue = lgx.AttachComponent<DynamicValueVariable<ulong>>();
             rawValue.VariableName.Value = "raw_value";
-
-            rawValue.Value.Value = (target.BoxedValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture);
+            
+            rawValue.Value.Value = (originalValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture);
             rawValue.Value.OnValueChange += field =>
             {
                 bvSet.SetValue.Value = EnumUtil.UInt64ToEnum<E>(field.Value);
@@ -315,7 +331,7 @@ namespace EnumDropdown
             ui.Text("Flags:");
         }
 
-        private static void BuildEnumUi(UIBuilder ui, IField target)
+        private static void BuildEnumUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
             // Destroy on cancel button pressed
             var cancel = ui.Button("Cancel", new color(1f, 0.8f, 0.8f));
@@ -325,7 +341,6 @@ namespace EnumDropdown
             ui.Text("Value:");
             var textField = ui.TextField(parseRTF: false); // Enum name field
             var btn = ui.Button("<i>Invalid Value</i>");
-
 
             /* Drive the dynvar name from the field so it can find valid enum values from the text input
              * Then relay the button event to the found enum value slot
@@ -353,11 +368,11 @@ namespace EnumDropdown
             ui.Text("All Values:");
         }
 
-        private static void PopulateValues<E>(Slot valuesRoot, IField target) where E : Enum
+        private static void PopulateValues<E>(Slot valuesRoot, IField target, EnumMemberEditor editor) where E : Enum
         {
             Type enumType = typeof(E);
 
-            if (valuesRoot == null || target == null || !enumType.IsEnum) return; // If valuesRoot is null or if target is not an enum skip
+            if (valuesRoot == null || (editor == null && target == null) || !enumType.IsEnum) return; // If valuesRoot is null or if target is not an enum skip
             var isFlag = enumType.IsDefined(typeof(FlagsAttribute), false); // Check if target is a flagEnum
             var values = Enum.GetValues(enumType); // Get all values for this enum
             
@@ -373,6 +388,26 @@ namespace EnumDropdown
             var currentRawValue = valuesRoot.AttachComponent<DynamicValueVariable<ulong>>();
             currentRawValue.VariableName.Value = "raw_value";
 
+            DynamicValueVariable<E> setValueProxy = null;
+
+            E originalValue = default;
+
+            if (editor!=null)
+            {
+                setValueProxy = valuesRoot.AttachComponent<DynamicValueVariable<E>>();
+                setValueProxy.VariableName.Value = "proxy_value";
+                setValueProxy.Value.OnValueChange += (field) =>
+                {
+                    editor.SetMemberValue(field.Value);
+                    enumSelectorRoot.Destroy();
+                };
+
+                object memberValue = editor.GetMemberValue();
+                originalValue = memberValue != null ? (E)memberValue : default;
+            } else if (target!=null)
+            {
+                originalValue = (E)target.BoxedValue;
+            }
 
             foreach (object value in values)
             { // Iterate over every enum value and create a button for it
@@ -408,8 +443,7 @@ namespace EnumDropdown
                         bvd.State.Value = (field.Value & ulongValue) >= ulongValue;
                     };
 
-
-                    bvd.State.Value = ((target.BoxedValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture) & ulongValue) >= ulongValue; // Initialize the highlight state to if the flag is enabled on generate
+                    bvd.State.Value = ((originalValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture) & ulongValue) >= ulongValue; // Initialize the highlight state to if the flag is enabled on generate
                     continue; // Skip to the next value and ignore the nonflag code below 
                 }
 
@@ -417,10 +451,10 @@ namespace EnumDropdown
                 btn.Slot.CreateReferenceVariable(valueName, btn.Slot); // Create a slot reference with the name of the value pointing to the button slot
                 var bvs = btn.Slot.AttachComponent<ButtonValueSet<E>>(); // Attach the button value set from earlier
 
-
-                bvs.TargetValue.TrySet(target);
+                bvs.TargetValue.TrySet(setValueProxy!=null?setValueProxy.Value:target);
                 (bvs.SetValue as IField).BoxedValue = value;
 
+                if (editor != null) continue;
                 btn.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = enumSelectorRoot.Destroy; // Cleanup the enum selector on pressed
             }
         }
