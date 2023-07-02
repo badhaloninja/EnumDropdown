@@ -23,7 +23,7 @@ namespace EnumDropdown
     {
         public override string Name => "EnumDropdown";
         public override string Author => "badhaloninja";
-        public override string Version => "1.1.0";
+        public override string Version => "1.2.0";
         public override string Link => "https://github.com/badhaloninja/EnumDropdown";
 
         private readonly static MethodInfo buildUI = typeof(EnumDropdown).GetMethod("BuildUi", BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
