@@ -365,7 +365,7 @@ namespace EnumDropdown
 
             if (valuesRoot == null || (editor == null && target == null) || !enumType.IsEnum) return; // If valuesRoot is null or if target is not an enum skip
             var isFlag = enumType.IsDefined(typeof(FlagsAttribute), false); // Check if target is a flagEnum
-            var values = Enum.GetValues(enumType); // Get all values for this enum
+            var names = Enum.GetNames(enumType); // Get all names for this enum
             
             var ui = new UIBuilder(valuesRoot);
             ui.Style.MinHeight = 32f;
@@ -400,14 +400,15 @@ namespace EnumDropdown
                 originalValue = (E)target.BoxedValue;
             }
 
-            foreach (object value in values)
-            { // Iterate over every enum value and create a button for it
-                var valueName = value.ToString();
+            foreach (var name in names)
+            {
+                var value = Enum.Parse(enumType, name);
+                // Iterate over every enum value and create a button for it
                 var ulongValue = (value as IConvertible).ToUInt64(CultureInfo.InvariantCulture); // Get the int value of the enum / flag
                 if (isFlag && ulongValue == 0) continue; // Skip flag 0 if it exists as it is *the* unselected value and can't be toggled
 
 
-                var btn = ui.Button(valueName);
+                var btn = ui.Button(name);
                 btn.BaseColor.Value = color; // Set color here so the drives are setup with white 
                 btn.RequireLockInToPress.Value = true; // Make it so you can scroll, I don't feel like setting up double press currently
 
@@ -439,7 +440,7 @@ namespace EnumDropdown
                 }
 
                 // Make it so the text editor can find value buttons
-                btn.Slot.CreateReferenceVariable(valueName, btn.Slot); // Create a slot reference with the name of the value pointing to the button slot
+                btn.Slot.CreateReferenceVariable(name, btn.Slot); // Create a slot reference with the name of the value pointing to the button slot
                 var bvs = btn.Slot.AttachComponent<ButtonValueSet<E>>(); // Attach the button value set from earlier
 
                 bvs.TargetValue.TrySet(setValueProxy!=null?setValueProxy.Value:target);
