@@ -28,6 +28,10 @@ namespace EnumDropdown
 
         private readonly static MethodInfo buildUI = typeof(EnumDropdown).GetMethod("BuildUi", BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
 
+        static readonly color salmon = new color(1f, 0.8f, 0.8f);
+        static readonly color cyan = new color(0.8f, 0.8f, 1f);
+        static readonly color lightGray = new color(0.8f);
+
         public override void OnEngineInit()
         {
             Harmony harmony = new Harmony("me.badhaloninja.EnumDropdown");
@@ -245,11 +249,11 @@ namespace EnumDropdown
         private static void BuildFlagUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
             // Destroy on cancel button pressed
-            var cancel = ui.Button("Cancel", new color(1f, 0.8f, 0.8f));
+            var cancel = ui.Button("Cancel", salmon);
             cancel.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = cancel.Slot.GetObjectRoot().Destroy;
 
             ui.Text("Value:");
-            var btn = ui.Button("<i>Invalid Value</i>", new color(0.8f, 0.8f, 1f, 1f));
+            var btn = ui.Button("<i>Invalid Value</i>", cyan);
 
             IField<E> buttonTarget;
             E originalValue;
@@ -325,7 +329,7 @@ namespace EnumDropdown
         private static void BuildEnumUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
             // Destroy on cancel button pressed
-            var cancel = ui.Button("Cancel", new color(1f, 0.8f, 0.8f));
+            var cancel = ui.Button("Cancel", salmon);
             cancel.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = cancel.Slot.GetObjectRoot().Destroy;
 
             // Value 
@@ -348,7 +352,7 @@ namespace EnumDropdown
 
             // If button target slot is not null 
             opt.DefaultOption.Label.DriveFrom(textField.Text.Content); // Drive default label to match text input
-            opt.DefaultOption.Color.Value = new color(0.8f, 0.8f, 1f); // Light cyan
+            opt.DefaultOption.Color.Value = cyan;
 
             // If button target driver cant find value matching the text input
             var noMatch = opt.Options.Add();
@@ -370,8 +374,6 @@ namespace EnumDropdown
             var ui = new UIBuilder(valuesRoot);
             ui.Style.MinHeight = 32f;
 
-            var color = new color(0.8f, 0.8f, 1f); // Light cyan
-            var falseColor = new color(0.8f); // Light gray
             //var type = typeof(ButtonValueSet<>).MakeGenericType(target.ValueType); // Store generic type for later
 
             var enumSelectorRoot = valuesRoot.GetObjectRoot(); // The root of the EnumSelector to clean up on value selected
@@ -409,7 +411,7 @@ namespace EnumDropdown
 
 
                 var btn = ui.Button(name);
-                btn.BaseColor.Value = color; // Set color here so the drives are setup with white 
+                btn.BaseColor.Value = name == value.ToString() ? cyan : salmon; // Set color here so the drives are setup with white, color based on if this is the first name with this value
                 btn.RequireLockInToPress.Value = true; // Make it so you can scroll, I don't feel like setting up double press currently
 
 
@@ -417,8 +419,8 @@ namespace EnumDropdown
                 {
                     // Drive to be highlighted if the flag is enabled
                     var bvd = btn.Slot.AttachComponent<BooleanValueDriver<color>>();
-                    bvd.TrueValue.Value = color;
-                    bvd.FalseValue.Value = falseColor;
+                    bvd.TrueValue.Value = cyan;
+                    bvd.FalseValue.Value = lightGray;
                     bvd.TargetField.TrySet(btn.BaseColor);
 
                     btn.Slot.AttachComponent<ButtonToggle>().TargetValue.TrySet(bvd.State); // Be lazy and use the button press to toggle the highlight state
