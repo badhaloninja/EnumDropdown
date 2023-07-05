@@ -369,12 +369,9 @@ namespace EnumDropdown
 
             if (valuesRoot == null || (editor == null && target == null) || !enumType.IsEnum) return; // If valuesRoot is null or if target is not an enum skip
             var isFlag = enumType.IsDefined(typeof(FlagsAttribute), false); // Check if target is a flagEnum
-            var names = Enum.GetNames(enumType); // Get all names for this enum
             
             var ui = new UIBuilder(valuesRoot);
             ui.Style.MinHeight = 32f;
-
-            //var type = typeof(ButtonValueSet<>).MakeGenericType(target.ValueType); // Store generic type for later
 
             var enumSelectorRoot = valuesRoot.GetObjectRoot(); // The root of the EnumSelector to clean up on value selected
 
@@ -402,11 +399,14 @@ namespace EnumDropdown
                 originalValue = (E)target.BoxedValue;
             }
 
-            foreach (var name in names)
+            ulong originalValueUlong = (originalValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture);
+            var names = Enum.GetNames(enumType); // Get all names for this enum
+            // Iterate over every enum value and create a button for it
+            foreach (string name in names) 
             {
-                var value = Enum.Parse(enumType, name);
-                // Iterate over every enum value and create a button for it
-                var ulongValue = (value as IConvertible).ToUInt64(CultureInfo.InvariantCulture); // Get the int value of the enum / flag
+                E value = (E)Enum.Parse(enumType, name); // Names *must* be unique so we can just parse to get the correct value
+                
+                var ulongValue = (value as IConvertible).ToUInt64(CultureInfo.InvariantCulture); // Get the uint value of the enum / flag
                 if (isFlag && ulongValue == 0) continue; // Skip flag 0 if it exists as it is *the* unselected value and can't be toggled
 
 
@@ -437,7 +437,7 @@ namespace EnumDropdown
                         bvd.State.Value = (field.Value & ulongValue) >= ulongValue;
                     };
 
-                    bvd.State.Value = ((originalValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture) & ulongValue) >= ulongValue; // Initialize the highlight state to if the flag is enabled on generate
+                    bvd.State.Value = originalValue.HasFlag(value); // Initialize the highlight state to if the flag is enabled on generate
                     continue; // Skip to the next value and ignore the nonflag code below 
                 }
 
@@ -445,8 +445,8 @@ namespace EnumDropdown
                 btn.Slot.CreateReferenceVariable(name, btn.Slot); // Create a slot reference with the name of the value pointing to the button slot
                 var bvs = btn.Slot.AttachComponent<ButtonValueSet<E>>(); // Attach the button value set from earlier
 
-                bvs.TargetValue.TrySet(setValueProxy!=null?setValueProxy.Value:target);
-                (bvs.SetValue as IField).BoxedValue = value;
+                bvs.TargetValue.TrySet(setValueProxy != null ? setValueProxy.Value : target);
+                bvs.SetValue.Value = value;
 
                 if (editor != null) continue;
                 btn.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = enumSelectorRoot.Destroy; // Cleanup the enum selector on pressed
