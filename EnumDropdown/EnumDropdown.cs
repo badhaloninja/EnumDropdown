@@ -28,6 +28,10 @@ namespace EnumDropdown
 
         private readonly static MethodInfo buildUI = typeof(EnumDropdown).GetMethod("BuildUi", BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
 
+        static readonly color salmon = new color(1f, 0.8f, 0.8f);
+        static readonly color cyan = new color(0.8f, 0.8f, 1f);
+        static readonly color lightGray = new color(0.8f);
+
         public override void OnEngineInit()
         {
             Harmony harmony = new Harmony("me.badhaloninja.EnumDropdown");
@@ -245,11 +249,11 @@ namespace EnumDropdown
         private static void BuildFlagUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
             // Destroy on cancel button pressed
-            var cancel = ui.Button("Cancel", new color(1f, 0.8f, 0.8f));
+            var cancel = ui.Button("Cancel", salmon);
             cancel.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = cancel.Slot.GetObjectRoot().Destroy;
 
             ui.Text("Value:");
-            var btn = ui.Button("<i>Invalid Value</i>", new color(0.8f, 0.8f, 1f, 1f));
+            var btn = ui.Button("<i>Invalid Value</i>", cyan);
 
             IField<E> buttonTarget;
             E originalValue;
@@ -325,7 +329,7 @@ namespace EnumDropdown
         private static void BuildEnumUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
             // Destroy on cancel button pressed
-            var cancel = ui.Button("Cancel", new color(1f, 0.8f, 0.8f));
+            var cancel = ui.Button("Cancel", salmon);
             cancel.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = cancel.Slot.GetObjectRoot().Destroy;
 
             // Value 
@@ -348,7 +352,7 @@ namespace EnumDropdown
 
             // If button target slot is not null 
             opt.DefaultOption.Label.DriveFrom(textField.Text.Content); // Drive default label to match text input
-            opt.DefaultOption.Color.Value = new color(0.8f, 0.8f, 1f); // Light cyan
+            opt.DefaultOption.Color.Value = cyan;
 
             // If button target driver cant find value matching the text input
             var noMatch = opt.Options.Add();
@@ -365,14 +369,9 @@ namespace EnumDropdown
 
             if (valuesRoot == null || (editor == null && target == null) || !enumType.IsEnum) return; // If valuesRoot is null or if target is not an enum skip
             var isFlag = enumType.IsDefined(typeof(FlagsAttribute), false); // Check if target is a flagEnum
-            var values = Enum.GetValues(enumType); // Get all values for this enum
             
             var ui = new UIBuilder(valuesRoot);
             ui.Style.MinHeight = 32f;
-
-            var color = new color(0.8f, 0.8f, 1f); // Light cyan
-            var falseColor = new color(0.8f); // Light gray
-            //var type = typeof(ButtonValueSet<>).MakeGenericType(target.ValueType); // Store generic type for later
 
             var enumSelectorRoot = valuesRoot.GetObjectRoot(); // The root of the EnumSelector to clean up on value selected
 
@@ -400,15 +399,19 @@ namespace EnumDropdown
                 originalValue = (E)target.BoxedValue;
             }
 
-            foreach (object value in values)
-            { // Iterate over every enum value and create a button for it
-                var valueName = value.ToString();
-                var ulongValue = (value as IConvertible).ToUInt64(CultureInfo.InvariantCulture); // Get the int value of the enum / flag
+            ulong originalValueUlong = (originalValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture);
+            var names = Enum.GetNames(enumType); // Get all names for this enum
+            // Iterate over every enum value and create a button for it
+            foreach (string name in names) 
+            {
+                E value = (E)Enum.Parse(enumType, name); // Names *must* be unique so we can just parse to get the correct value
+                
+                var ulongValue = (value as IConvertible).ToUInt64(CultureInfo.InvariantCulture); // Get the uint value of the enum / flag
                 if (isFlag && ulongValue == 0) continue; // Skip flag 0 if it exists as it is *the* unselected value and can't be toggled
 
 
-                var btn = ui.Button(valueName);
-                btn.BaseColor.Value = color; // Set color here so the drives are setup with white 
+                var btn = ui.Button(name);
+                btn.BaseColor.Value = name == value.ToString() ? cyan : salmon; // Set color here so the drives are setup with white, color based on if this is the first name with this value
                 btn.RequireLockInToPress.Value = true; // Make it so you can scroll, I don't feel like setting up double press currently
 
 
@@ -416,8 +419,8 @@ namespace EnumDropdown
                 {
                     // Drive to be highlighted if the flag is enabled
                     var bvd = btn.Slot.AttachComponent<BooleanValueDriver<color>>();
-                    bvd.TrueValue.Value = color;
-                    bvd.FalseValue.Value = falseColor;
+                    bvd.TrueValue.Value = cyan;
+                    bvd.FalseValue.Value = lightGray;
                     bvd.TargetField.TrySet(btn.BaseColor);
 
                     btn.Slot.AttachComponent<ButtonToggle>().TargetValue.TrySet(bvd.State); // Be lazy and use the button press to toggle the highlight state
@@ -434,16 +437,16 @@ namespace EnumDropdown
                         bvd.State.Value = (field.Value & ulongValue) >= ulongValue;
                     };
 
-                    bvd.State.Value = ((originalValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture) & ulongValue) >= ulongValue; // Initialize the highlight state to if the flag is enabled on generate
+                    bvd.State.Value = originalValue.HasFlag(value); // Initialize the highlight state to if the flag is enabled on generate
                     continue; // Skip to the next value and ignore the nonflag code below 
                 }
 
                 // Make it so the text editor can find value buttons
-                btn.Slot.CreateReferenceVariable(valueName, btn.Slot); // Create a slot reference with the name of the value pointing to the button slot
+                btn.Slot.CreateReferenceVariable(name, btn.Slot); // Create a slot reference with the name of the value pointing to the button slot
                 var bvs = btn.Slot.AttachComponent<ButtonValueSet<E>>(); // Attach the button value set from earlier
 
-                bvs.TargetValue.TrySet(setValueProxy!=null?setValueProxy.Value:target);
-                (bvs.SetValue as IField).BoxedValue = value;
+                bvs.TargetValue.TrySet(setValueProxy != null ? setValueProxy.Value : target);
+                bvs.SetValue.Value = value;
 
                 if (editor != null) continue;
                 btn.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = enumSelectorRoot.Destroy; // Cleanup the enum selector on pressed
