@@ -26,14 +26,21 @@ namespace EnumDropdown
         public override string Version => "1.2.0";
         public override string Link => "https://github.com/badhaloninja/EnumDropdown";
 
-        private readonly static MethodInfo buildUI = typeof(EnumDropdown).GetMethod("BuildUi", BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
+        private readonly static MethodInfo buildSelectorUI = typeof(EnumDropdown).GetMethod(nameof(BuildSelectorUI), BindingFlags.Static | BindingFlags.NonPublic); // Store this for later :)
 
-        static readonly color salmon = new color(1f, 0.8f, 0.8f);
-        static readonly color cyan = new color(0.8f, 0.8f, 1f);
-        static readonly color lightGray = new color(0.8f);
+        private static ModConfiguration config;
+
+        [AutoRegisterConfigKey]
+        private static readonly ModConfigurationKey<bool> showMoreEnumInfo = new ModConfigurationKey<bool>("showMoreEnumInfo", "Show more information about enums in the selector", () => false);
+
+        static readonly color salmon = color.Red.SetSaturation(0.2f);
+        static readonly color cyan = color.Blue.SetSaturation(0.2f);
+        static readonly color lightGray = color.White.SetValue(0.8f);
+        static readonly color invalidColor = color.Red.SetSaturation(0.5f);
 
         public override void OnEngineInit()
         {
+            config = GetConfiguration();
             Harmony harmony = new Harmony("me.badhaloninja.EnumDropdown");
             harmony.PatchAll();
         }
@@ -76,7 +83,7 @@ namespace EnumDropdown
             }
         }
 
-        private static void AddDropdownBtn(UIBuilder ui, IField target, EnumMemberEditor editor = null)
+        public static void AddDropdownBtn(UIBuilder ui, IField target, EnumMemberEditor editor = null)
         {
             var btn = ui.Button("▼");
             btn.Slot.DestroyWhenUserLeaves(btn.Slot.LocalUser);
@@ -186,7 +193,6 @@ namespace EnumDropdown
 
         public static Slot BuildEnumSelector(IField target, EnumMemberEditor editor)
         {
-            
             var root = target.World.LocalUserSpace.AddSlot("EnumSelector", false); // Create non-persistant root
             root.AttachComponent<Grabbable>();
             root.AttachComponent<ObjectRoot>();
@@ -207,13 +213,6 @@ namespace EnumDropdown
             ui.VerticalLayout(8f, 8f);
             ui.FitContent(SizeFit.Disabled, SizeFit.MinSize);
 
-            //CANCEL
-            //VALUE
-            //FIELD
-            //BUTTON
-            //ALL VALUES:
-            //ValueList
-
             ui.Style.MinHeight = 32f;
 
             Type valueType = target.ValueType;
@@ -223,20 +222,37 @@ namespace EnumDropdown
                 valueType = memberValue.GetType();
             }
 
-            buildUI.MakeGenericMethod(valueType).Invoke(null, new object[] { ui, target, editor });
+            buildSelectorUI.MakeGenericMethod(valueType).Invoke(null, new object[] { ui, target, editor });
 
             return root;
         }
 
-        private static void BuildUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
+        private static void BuildSelectorUI<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
-            if (typeof(E).IsDefined(typeof(FlagsAttribute), false))
+            var isFlag = typeof(E).IsDefined(typeof(FlagsAttribute), false);
+
+            if (config.GetValue(showMoreEnumInfo))
+            {
+                var flagStr = isFlag ? "Flag" : "Enum";
+                ui.Text($"{typeof(E).Name} {flagStr}<{default(E).GetTypeCode()}> ");
+            }
+
+            // Destroy on cancel button pressed
+            var cancel = ui.Button("Cancel", salmon);
+            cancel.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = cancel.Slot.GetObjectRoot().Destroy;
+
+            // Value 
+            ui.Text("Value:");
+
+            if (isFlag)
             { // If the enum is a flag type (where you can have multiple values set at once)
-                BuildFlagUi<E>(ui, target, editor);
+                BuildFlagUI<E>(ui, target, editor);
+                ui.Text("Flags:");
             }
             else
             {
-                BuildEnumUi<E>(ui, target, editor);
+                BuildEnumUI<E>(ui);
+                ui.Text("All Values:");
             }
 
             ui.Style.MinHeight = -1f; // Reset MinHeight so that the VerticalLayout does overlay other elements
@@ -245,72 +261,67 @@ namespace EnumDropdown
             PopulateValues<E>(ui.Root, target, editor);
         }
 
-
-        private static void BuildFlagUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
+        private static void BuildFlagUI<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
         {
-            // Destroy on cancel button pressed
-            var cancel = ui.Button("Cancel", salmon);
-            cancel.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = cancel.Slot.GetObjectRoot().Destroy;
+            var SelectedValueButton = ui.Button("<i>Invalid Value</i>", cyan);
 
-            ui.Text("Value:");
-            var btn = ui.Button("<i>Invalid Value</i>", cyan);
-
-            IField<E> buttonTarget;
+            IField<E> targetValue;
             E originalValue;
 
             DynamicValueVariable<E> setValueProxy = null;
             if (editor != null)
             {
-                setValueProxy = btn.Slot.AttachComponent<DynamicValueVariable<E>>();
+                setValueProxy = SelectedValueButton.Slot.AttachComponent<DynamicValueVariable<E>>();
                 setValueProxy.VariableName.Value = "proxy_value";
 
                 object memberValue = editor.GetMemberValue();
 
-                originalValue = memberValue != null? (E)memberValue : default;
-                buttonTarget = setValueProxy.Value;
+                originalValue = memberValue != null ? (E)memberValue : default;
+                targetValue = setValueProxy.Value;
             } else
             {
-                originalValue = (E)target.BoxedValue;
-                buttonTarget = target as IField<E>;
+                targetValue = target as IField<E>;
+                originalValue = targetValue.Value;
             }
 
             // Destory On Value set
             if (editor == null)
             {
-                btn.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = btn.Slot.GetObjectRoot().Destroy;
+                SelectedValueButton.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = SelectedValueButton.Slot.GetObjectRoot().Destroy;
             }
             
             // Value Set
-            var bvSet = btn.Slot.AttachComponent<ButtonValueSet<E>>();
-            bvSet.TargetValue.Target = buttonTarget; // Point value set to target field
-            bvSet.SetValue.Value = originalValue; // Initialize to the current value
+            var valueSet = SelectedValueButton.Slot.AttachComponent<ButtonValueSet<E>>();
+            valueSet.TargetValue.Target = targetValue; // Point value set to target field
+            valueSet.SetValue.Value = originalValue; // Initialize to the current value
 
             // Drive value set lable to be the selected enums
-            btn.LabelTextField.DriveFrom(bvSet.SetValue, "{0}");
+            string format = config.GetValue(showMoreEnumInfo) ? "{0:d}: {0}" : "{0}";
+            SelectedValueButton.LabelTextField.DriveFrom(valueSet.SetValue, format);
 
             // Impulse Reciever to handle flag toggle
-            var lgx = btn.Slot.AddSlot("ENUMSELECTOR.TOGGLEFLAG");
+            var LogixRoot = SelectedValueButton.Slot.AddSlot("ENUMSELECTOR.TOGGLEFLAG");
 
 
             // IntToEnum breaks with enums that are set to something other than int (ColorMask for example)
             // Using ulong field and listening for changes to get around this while still having 'multiplayer support'
-            var rawValue = lgx.AttachComponent<DynamicValueVariable<ulong>>();
+            var rawValue = LogixRoot.AttachComponent<DynamicValueVariable<ulong>>();
             rawValue.VariableName.Value = "raw_value";
             
             rawValue.Value.Value = (originalValue as IConvertible).ToUInt64(CultureInfo.InvariantCulture);
             rawValue.Value.OnValueChange += field =>
             {
-                bvSet.SetValue.Value = EnumUtil.UInt64ToEnum<E>(field.Value);
+                valueSet.SetValue.Value = EnumUtil.UInt64ToEnum<E>(field.Value);
             };
             
             // Attach the LogiX nodes
-            var impulseReciever = lgx.AttachComponent<DynamicImpulseReceiverWithValue<ulong>>();
-            var xor = lgx.AttachComponent<XOR_Ulong>();
-            var write = lgx.AttachComponent<WriteValueNode<ulong>>();
-            var referenceNode = lgx.AttachComponent<ReferenceNode<IValue<ulong>>>();
+            var impulseReciever = LogixRoot.AttachComponent<DynamicImpulseReceiverWithValue<ulong>>();
+            var xor = LogixRoot.AttachComponent<XOR_Ulong>();
+            var write = LogixRoot.AttachComponent<WriteValueNode<ulong>>();
+            var referenceNode = LogixRoot.AttachComponent<ReferenceNode<IValue<ulong>>>();
 
             // Assign the LogiX nodes
-            impulseReciever.Tag.TryConnectTo(lgx.NameField); // Use the slot name as the impulse tag
+            impulseReciever.Tag.TryConnectTo(LogixRoot.NameField); // Use the slot name as the impulse tag
 
             // XOR the current enum value with the flag to toggle from the impulse reciever
             xor.A.TryConnectTo(rawValue.Value); 
@@ -321,46 +332,35 @@ namespace EnumDropdown
 
             referenceNode.RefTarget.TrySet(rawValue.Value); // Point the reference node to the rawValue
             write.Target.TryConnectTo(referenceNode); // Connect the reference node to the write node
-
-
-            ui.Text("Flags:");
         }
 
-        private static void BuildEnumUi<E>(UIBuilder ui, IField target, EnumMemberEditor editor) where E : Enum
+        private static void BuildEnumUI<E>(UIBuilder ui) where E : Enum
         {
-            // Destroy on cancel button pressed
-            var cancel = ui.Button("Cancel", salmon);
-            cancel.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = cancel.Slot.GetObjectRoot().Destroy;
-
-            // Value 
-            ui.Text("Value:");
-            var textField = ui.TextField(parseRTF: false); // Enum name field
-            var btn = ui.Button("<i>Invalid Value</i>");
+            var SearchTermField = ui.TextField(parseRTF: false);
+            var SelectedValueButton = ui.Button("<i>Invalid Value</i>");
 
             /* Drive the dynvar name from the field so it can find valid enum values from the text input
              * Then relay the button event to the found enum value slot
              * Look at populate values method for more on this
              */
-            var bper = btn.Slot.AttachComponent<ButtonPressEventRelay>(); 
-            bper.Target.DriveFromVariable("").VariableName.DriveFrom(textField.Text.Content);
+            var pressRelay = SelectedValueButton.Slot.AttachComponent<ButtonPressEventRelay>(); 
+            pressRelay.Target.DriveFromVariable("").VariableName.DriveFrom(SearchTermField.Text.Content);
 
             //Setup OptionDescriptionDriver
-            var opt = btn.Slot.AttachComponent<ReferenceOptionDescriptionDriver<Slot>>();
-            opt.Reference.Target = bper.Target; // Make the conditional be the result of the variable driver
-            opt.Label.Target = btn.LabelTextField; // Target the button label
-            opt.Color.Target = btn.BaseColor; // Target the button color
+            var descriptionDriver = SelectedValueButton.Slot.AttachComponent<ReferenceOptionDescriptionDriver<Slot>>();
+            
+            descriptionDriver.Label.Target = SelectedValueButton.LabelTextField; // Target the button label
+            descriptionDriver.Color.Target = SelectedValueButton.BaseColor; // Target the button color
+            descriptionDriver.Reference.Target = pressRelay.Target; // Make the conditional be the result of the variable driver
 
-            // If button target slot is not null 
-            opt.DefaultOption.Label.DriveFrom(textField.Text.Content); // Drive default label to match text input
-            opt.DefaultOption.Color.Value = cyan;
+            // Button Target is not null
+            descriptionDriver.DefaultOption.Label.DriveFromVariable("").VariableName.DriveFrom(SearchTermField.Text.Content); // Drive default label to match text input
+            descriptionDriver.DefaultOption.Color.Value = cyan;
 
             // If button target driver cant find value matching the text input
-            var noMatch = opt.Options.Add();
-            noMatch.Label.Value = "<i>Invalid Value</i>";
-            noMatch.Color.Value = color.Red.SetSaturation(0.5f); // Light red
-
-            // End OptionDescriptionDriver setup
-            ui.Text("All Values:");
+            var ReferenceIsNull = descriptionDriver.Options.Add();
+            ReferenceIsNull.Label.Value = "<i>Invalid Value</i>";
+            ReferenceIsNull.Color.Value = invalidColor; // Light red
         }
 
         private static void PopulateValues<E>(Slot valuesRoot, IField target, EnumMemberEditor editor) where E : Enum
@@ -382,7 +382,7 @@ namespace EnumDropdown
 
             E originalValue = default;
 
-            if (editor!=null)
+            if (editor != null)
             {
                 setValueProxy = valuesRoot.AttachComponent<DynamicValueVariable<E>>();
                 setValueProxy.VariableName.Value = "proxy_value";
@@ -394,7 +394,7 @@ namespace EnumDropdown
 
                 object memberValue = editor.GetMemberValue();
                 originalValue = memberValue != null ? (E)memberValue : default;
-            } else if (target!=null)
+            } else if (target != null)
             {
                 originalValue = (E)target.BoxedValue;
             }
@@ -408,48 +408,53 @@ namespace EnumDropdown
                 
                 var ulongValue = (value as IConvertible).ToUInt64(CultureInfo.InvariantCulture); // Get the uint value of the enum / flag
                 if (isFlag && ulongValue == 0) continue; // Skip flag 0 if it exists as it is *the* unselected value and can't be toggled
-
-
-                var btn = ui.Button(name);
-                btn.BaseColor.Value = name == value.ToString() ? cyan : salmon; // Set color here so the drives are setup with white, color based on if this is the first name with this value
-                btn.RequireLockInToPress.Value = true; // Make it so you can scroll, I don't feel like setting up double press currently
-
-
+                
+                string valueLabel = config.GetValue(showMoreEnumInfo) ? string.Format("{0:d}: {1}", value, name) : name;
+                var valueButton = ui.Button(valueLabel);
+                valueButton.BaseColor.Value = name == value.ToString() ? cyan : salmon; // Set color here so the drives are setup with white, color based on if this is the first name with this value
+                valueButton.RequireLockInToPress.Value = true; // Make it so you can scroll, I don't feel like setting up double press currently
+                
+                
                 if (isFlag) // Handle if enum is a flag
                 {
                     // Drive to be highlighted if the flag is enabled
-                    var bvd = btn.Slot.AttachComponent<BooleanValueDriver<color>>();
-                    bvd.TrueValue.Value = cyan;
-                    bvd.FalseValue.Value = lightGray;
-                    bvd.TargetField.TrySet(btn.BaseColor);
+                    var valueSelectedHighlight = valueButton.Slot.AttachComponent<BooleanValueDriver<color>>();
+                    valueSelectedHighlight.TrueValue.Value = cyan;
+                    valueSelectedHighlight.FalseValue.Value = lightGray;
+                    valueSelectedHighlight.TargetField.TrySet(valueButton.BaseColor);
 
-                    btn.Slot.AttachComponent<ButtonToggle>().TargetValue.TrySet(bvd.State); // Be lazy and use the button press to toggle the highlight state
+                    valueButton.Slot.AttachComponent<ButtonToggle>().TargetValue.TrySet(valueSelectedHighlight.State); // Be lazy and use the button press to toggle the highlight state
 
 
                     // On pressed send impulse to toggle this flag
-                    var trigger = btn.Slot.AttachComponent<ButtonDynamicImpulseTriggerWithValue<ulong>>();
+                    var trigger = valueButton.Slot.AttachComponent<ButtonDynamicImpulseTriggerWithValue<ulong>>();
                     trigger.Target.Target = enumSelectorRoot;
                     trigger.PressedData.Tag.Value = "ENUMSELECTOR.TOGGLEFLAG";
                     trigger.PressedData.Value.Value = ulongValue; // send the int value of the flag
 
                     currentRawValue.Value.OnValueChange += (field) =>
                     { // Update other values when raw_value changes
-                        bvd.State.Value = (field.Value & ulongValue) >= ulongValue;
+                        valueSelectedHighlight.State.Value = (field.Value & ulongValue) >= ulongValue;
                     };
 
-                    bvd.State.Value = originalValue.HasFlag(value); // Initialize the highlight state to if the flag is enabled on generate
+                    valueSelectedHighlight.State.Value = originalValue.HasFlag(value); // Initialize the highlight state to if the flag is enabled on generate
                     continue; // Skip to the next value and ignore the nonflag code below 
                 }
 
                 // Make it so the text editor can find value buttons
-                btn.Slot.CreateReferenceVariable(name, btn.Slot); // Create a slot reference with the name of the value pointing to the button slot
-                var bvs = btn.Slot.AttachComponent<ButtonValueSet<E>>(); // Attach the button value set from earlier
+                valueButton.Slot.CreateReferenceVariable(name, valueButton.Slot);
+                valueButton.Slot.CreateReferenceVariable(ulongValue.ToString(), valueButton.Slot);
+                
+                valueButton.Slot.CreateVariable(name, valueLabel);
+                valueButton.Slot.CreateVariable(ulongValue.ToString(), valueLabel);
 
-                bvs.TargetValue.TrySet(setValueProxy != null ? setValueProxy.Value : target);
-                bvs.SetValue.Value = value;
+                var valueSet = valueButton.Slot.AttachComponent<ButtonValueSet<E>>(); // Attach the button value set from earlier
+
+                valueSet.TargetValue.TrySet(setValueProxy != null ? setValueProxy.Value : target);
+                valueSet.SetValue.Value = value;
 
                 if (editor != null) continue;
-                btn.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = enumSelectorRoot.Destroy; // Cleanup the enum selector on pressed
+                valueButton.Slot.AttachComponent<ButtonActionTrigger>().OnPressed.Target = enumSelectorRoot.Destroy; // Cleanup the enum selector on pressed
             }
         }
     }
