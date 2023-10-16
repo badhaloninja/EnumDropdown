@@ -9,13 +9,20 @@
     <TargetFramework>net472</TargetFramework>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
-    <NeosPath>$(MSBuildThisFileDirectory)NeosVR</NeosPath>
-    <NeosPath Condition="Exists('C:\Program Files (x86)\Steam\steamapps\common\NeosVR\')">C:\Program Files (x86)\Steam\steamapps\common\NeosVR\</NeosPath>
-    <NeosPath Condition="Exists('$(HOME)/.steam/steam/steamapps/common/NeosVR/')">$(HOME)/.steam/steam/steamapps/common/NeosVR/</NeosPath>
-    <NeosPath Condition="Exists('E:\Programs\Steam\steamapps\common\NeosVR\')">E:\Programs\Steam\steamapps\common\NeosVR\</NeosPath>
+    <LangVersion>preview</LangVersion>
 
-    <NeosAltPath>$(NeosPath)\Alt\</NeosAltPath>
-    <NeosAltPath Condition="Exists('E:\NeosVr\Projects\Mod Dev\_DummyCache\')">E:\NeosVr\Projects\Mod Dev\_DummyCache\</NeosAltPath>
+    <AppName>Resonite</AppName>
+    <ModLoaderShort>rml</ModLoaderShort>
+
+    <AppPath>$(MSBuildThisFileDirectory)$(AppName)</AppPath>
+    <AppPath Condition="Exists('F:\Windows\')">F:\Windows\</AppPath>
+    <AppPath Condition="Exists('E:\SteamLibrary\steamapps\common\$(AppName)')">E:\SteamLibrary\steamapps\common\$(AppName)\</AppPath>
+    <AppPath Condition="Exists('C:\Program Files (x86)\Steam\steamapps\common\$(AppName)\')">C:\Program Files (x86)\Steam\steamapps\common\$(AppName)\</AppPath>
+
+    <AppData Condition="Exists('$(AppPath)$(AppName)_Data')">$(AppPath)$(AppName)_Data\Managed\</AppData>
+
+    <AlternateDataPath>$(AppPath)\Alt\</AlternateDataPath>
+    <AlternateDataPath Condition="Exists('$(AppPath)')">$(AppPath)_altData</AlternateDataPath>
 
     <CopyLocal>false</CopyLocal>
     <CopyToMods Condition="'$(CopyToMods)'==''">true</CopyToMods>
@@ -29,26 +36,29 @@
 
   <ItemGroup>
     <Reference Include="HarmonyLib">
-      <HintPath>$(NeosPath)nml_libs\0Harmony.dll</HintPath>
-      <HintPath Condition="Exists('$(NeosPath)0Harmony.dll')">$(NeosPath)0Harmony.dll</HintPath>
+      <HintPath>$(AppPath)$(ModLoaderShort)_libs\0Harmony.dll</HintPath>
+      <HintPath Condition="Exists('$(AppPath)0Harmony.dll')">$(AppPath)0Harmony.dll</HintPath>
     </Reference>
-    <Reference Include="BaseX">
-      <HintPath>$(NeosPath)Neos_Data\Managed\BaseX.dll</HintPath>
-    </Reference>
-    <Reference Include="CloudX.Shared">
-      <HintPath>$(NeosPath)Neos_Data\Managed\CloudX.Shared.dll</HintPath>
+    <Reference Include="Elements.Core">
+      <HintPath>$(AppData)Elements.Core.dll</HintPath>
     </Reference>
     <Reference Include="FrooxEngine">
-      <HintPath>$(NeosPath)Neos_Data\Managed\FrooxEngine.dll</HintPath>
+      <HintPath>$(AppData)FrooxEngine.dll</HintPath>
     </Reference>
-    <Reference Include="NeosModLoader">
-      <HintPath>$(NeosPath)NeosModLoader.dll</HintPath>
-      <HintPath>$(NeosPath)Libraries\NeosModLoader.dll</HintPath>
+    <Reference Include="ProtoFluxBindings">
+	  <HintPath>$(AppData)ProtoFluxBindings.dll</HintPath>
+	</Reference>
+	<Reference Include="ProtoFlux.Core">
+	  <HintPath>$(AppData)ProtoFlux.Core.dll</HintPath>
+	</Reference>
+    <Reference Include="$(AppName)ModLoader">
+      <HintPath>$(AppPath)$(AppName)ModLoader.dll</HintPath>
+      <HintPath>$(AppPath)Libraries\$(AppName)ModLoader.dll</HintPath>
     </Reference>
   </ItemGroup>
   
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(CopyToMods)'=='true'">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(NeosPath)nml_mods" />
-    <Message Text="Copied $(TargetFileName) to $(NeosPath)nml_mods" Importance="high" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AppPath)$(ModLoaderShort)_mods" />
+    <Message Text="Copied $(TargetFileName) to $(AppPath)$(ModLoaderShort)_mods" Importance="high" />
   </Target>
 </Project>

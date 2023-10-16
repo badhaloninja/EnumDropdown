@@ -1,28 +1,29 @@
 {
   "profiles": {
-    "Launch Neos": {
+
+    "Launch Mod": {
       "commandName": "Executable",
-      "executablePath": "$(NeosPath)Neos.exe",
-      "commandLineArgs": "-Screen -Invisible -LoadAssembly \"Libraries/NeosModLoader.dll\" -DontAutoOpenCloudHome -Config Config.json",
-      "workingDirectory": "$(NeosPath)"
+      "executablePath": "$(AppPath)$(AppName).exe",
+      "commandLineArgs": "-Screen -Invisible -LoadAssembly \"Libraries/$(AppName)ModLoader.dll\" -DoNotAutoLoadHome -SkipIntroTutorial",
+      "workingDirectory": "$(AppPath)"
     },
-    "Launch Neos in VR": {
+    "Launch Mod in VR": {
       "commandName": "Executable",
-      "executablePath": "$(NeosPath)Neos.exe",
-      "commandLineArgs": "-Invisible -LoadAssembly \"Libraries/NeosModLoader.dll\" -DontAutoOpenCloudHome -Config Config.json",
-      "workingDirectory": "$(NeosPath)"
+      "executablePath": "$(AppPath)$(AppName).exe",
+      "commandLineArgs": "-Invisible -LoadAssembly \"Libraries/$(AppName)ModLoader.dll\" -DoNotAutoLoadHome -SkipIntroTutorial",
+      "workingDirectory": "$(AppPath)"
     },
-    "Launch Neos Alt": {
+    "Launch Mod Alt": {
       "commandName": "Executable",
-      "executablePath": "$(NeosPath)Neos.exe",
-      "commandLineArgs": "-Screen -Invisible -LoadAssembly \"Libraries/NeosModLoader.dll\" -DontAutoOpenCloudHome -Config Config.json -DataPath \"$(NeosAltPath)\\Data\" -CachePath \"$(NeosAltPath)\\Cache\"",
-      "workingDirectory": "$(NeosPath)"
+      "executablePath": "$(AppPath)$(AppName).exe",
+      "commandLineArgs": "-Screen -Invisible -LoadAssembly \"Libraries/$(AppName)ModLoader.dll\" -DoNotAutoLoadHome -SkipIntroTutorial -Config Config.json -DataPath \"$(AlternateDataPath)\\Data\" -CachePath \"$(AlternateDataPath)\\Cache\"",
+      "workingDirectory": "$(AppPath)"
     },
-    "Launch Neos in VR Alt": {
+    "Launch Mod in VR Alt": {
       "commandName": "Executable",
-      "executablePath": "$(NeosPath)Neos.exe",
-      "commandLineArgs": "-Invisible -LoadAssembly \"Libraries/NeosModLoader.dll\" -DontAutoOpenCloudHome -Config Config.json -DataPath \"$(NeosAltPath)\\Data\" -CachePath \"$(NeosAltPath)\\Cache\"",
-      "workingDirectory": "$(NeosPath)"
+      "executablePath": "$(AppPath)$(AppName).exe",
+      "commandLineArgs": "-Invisible -LoadAssembly \"Libraries/$(AppName)ModLoader.dll\" -DoNotAutoLoadHome -SkipIntroTutorial -Config Config.json -DataPath \"$(AlternateDataPath)\\Data\" -CachePath \"$(AlternateDataPath)\\Cache\"",
+      "workingDirectory": "$(AppPath)"
     }
   }
 }
