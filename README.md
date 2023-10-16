@@ -1,6 +1,6 @@
 ﻿# EnumDropdown
 
-A [ResoniteModLoader](https://github.com/resonite-modding-group/ResoniteModLoader/) mod for [Resonite](https://resonite.com/). Adds a dropdown for enum fields and enum input logix nodes
+A [ResoniteModLoader](https://github.com/resonite-modding-group/ResoniteModLoader/) mod for [Resonite](https://resonite.com/). Adds a dropdown for enum fields
 
 ## Installation
 1. Install [ResoniteModLoader](https://github.com/resonite-modding-group/ResoniteModLoader/).
