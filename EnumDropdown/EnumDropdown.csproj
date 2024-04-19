@@ -4,7 +4,7 @@
     <ModLoaderShort>rml</ModLoaderShort>
 
     <Product>EnumDropdown</Product>
-    <Version>2.1.0</Version>
+    <Version>2.1.1</Version>
 
     <Company>badhaloninja</Company>
     <Copyright>Copyright © $(Company) 2024</Copyright>
